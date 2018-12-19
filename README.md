@@ -1,17 +1,15 @@
-Arduino-MS5611
-===============
+Arduino-MS5611-Interrupt
+========================
 
 MS5611 Barometric Pressure & Temperature Sensor Arduino Library
 
 This library use I2C to communicate, 2 pins are required to interface.
 
-Read more: http://www.jarzebski.pl/arduino/czujniki-i-sensory/czujnik-cisnienia-i-temperatury-ms5611.html
+This is a modified Version of the well known Library Arduino-MS5611
+from Korneliusz Jarzebski https://github.com/jarzebski/Arduino-MS5611
 
-![MS5611](http://www.jarzebski.pl/media/full/publish/2014/05/ms5611-simple.png)
-
-![MS5611](http://www.jarzebski.pl/media/big/publish/2014/05/ms5611-processing.png)
-
-The library has been modified to be interrupt driven
-This way the delays within the original code are eliminated
+The library has been modified to be interrupt driven.
+This way the delays within the original code are eliminated.
 There is plenty of time to implement more sophisticated filters now.
-Exact go around time of 20ms with the highest resolution by polling generated flag. 
+A generated flag helps to feed a filter with a minimum of latency.
+I.e. 20ms spaced Samples for MS5611_ULTRA_HIGH_RES
