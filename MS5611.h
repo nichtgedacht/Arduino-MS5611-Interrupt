@@ -5,7 +5,7 @@ Version: 1.0.0
 (c) 2014 Korneliusz Jarzebski
 www.jarzebski.pl
 
-Version: 2.0.0
+Version: 2.1.0
 modified to be interrupt driven by nichtgedacht 
 
 This program is free software: you can redistribute it and/or modify
@@ -40,48 +40,49 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define MS5611_CMD_CONV_D2            (0x50)
 #define MS5611_CMD_READ_PROM          (0xA2)
 
-typedef enum
-{
-    MS5611_ULTRA_HIGH_RES   = 0x08,
-    MS5611_HIGH_RES         = 0x06,
-    MS5611_STANDARD         = 0x04,
-    MS5611_LOW_POWER        = 0x02,
-    MS5611_ULTRA_LOW_POWER  = 0x00
+typedef enum {
+    MS5611_ULTRA_HIGH_RES = 0x08,
+    MS5611_HIGH_RES = 0x06,
+    MS5611_STANDARD = 0x04,
+    MS5611_LOW_POWER = 0x02,
+    MS5611_ULTRA_LOW_POWER = 0x00
 } ms5611_osr_t;
 
 
 //void ISR(TIMER1_COMPA_vect);
 
-class MS5611
-{
-	public:
+class MS5611 {
+  public:
 
-	bool begin(ms5611_osr_t osr = MS5611_ULTRA_HIGH_RES);
-	void prepareConversion(uint8_t cmd);
-	double getTemperature(bool compensation = true);
-	int32_t getPressure(bool compensation = true);
-	double getAltitude(double pressure, double seaLevelPressure = 101325);
-	double getSeaLevel(double pressure, double altitude);
-	void readRawTemperature(void);
-	void readRawPressure(void);
-	ms5611_osr_t getOversampling(void);
-	volatile bool data_ready;
-	volatile bool P_flag;
+    bool begin (ms5611_osr_t osr_p =
+                MS5611_ULTRA_HIGH_RES, ms5611_osr_t osr_t = MS5611_STANDARD);
+    double getTemperature (bool compensation = true);
+    int32_t getPressure (bool compensation = true);
+    double getAltitude (double pressure, double seaLevelPressure = 101325);
+    double getSeaLevel (double pressure, double altitude);
+    void readRawTemperature (void);
+    void readRawPressure (void);
+    void prepareConversion_D1 (void);
+    void prepareConversion_D2 (void);
+    volatile bool data_ready;
+    uint16_t delta_t;
+    //uint16_t t1, t2;
 
-	private:
+  private:
 
 	uint16_t fc[6];
-	uint8_t ct;
-	uint8_t uosr;
-	int32_t TEMP2;
-	int64_t OFF2, SENS2;
-	volatile uint32_t D1, D2;
-	void reset(void);
-	void readPROM(void);
-	uint16_t readRegister16(uint8_t reg);
-	uint32_t readRegister24(uint8_t reg);
-	void setOversampling(ms5611_osr_t osr);
-	void timer1Init(void);
+    uint16_t ct_p, ct_t;
+    int32_t TEMP2;
+    int64_t OFF2, SENS2;
+    uint8_t uosr_p;
+    uint8_t uosr_t;
+    volatile uint32_t D1, D2;
+    void reset (void);
+    void readPROM (void);
+    uint16_t readRegister16 (uint8_t reg);
+    uint32_t readRegister24 (uint8_t reg);
+    void setOversampling (ms5611_osr_t osr_p, ms5611_osr_t osr_t);
+    void timer1Init (void);
 };
 
 extern MS5611 ms5611;
