@@ -54,16 +54,15 @@ typedef enum {
 class MS5611 {
   public:
 
-    bool begin (ms5611_osr_t osr_p =
-                MS5611_ULTRA_HIGH_RES, ms5611_osr_t osr_t = MS5611_STANDARD);
-    double getTemperature (bool compensation = true);
-    int32_t getPressure (bool compensation = true);
-    double getAltitude (double pressure, double seaLevelPressure = 101325);
-    double getSeaLevel (double pressure, double altitude);
-    void readRawTemperature (void);
-    void readRawPressure (void);
-    void prepareConversion_D1 (void);
-    void prepareConversion_D2 (void);
+    bool begin(ms5611_osr_t osr_p = MS5611_ULTRA_HIGH_RES, ms5611_osr_t osr_t = MS5611_STANDARD);
+    double getTemperature(bool compensation = true);
+    int32_t getPressure(bool compensation = true);
+    double getAltitude(double pressure, double seaLevelPressure = 101325);
+    double getSeaLevel(double pressure, double altitude);
+    void readRawTemperature(void);
+    void readRawPressure(void);
+    void prepareConversion_D1(void);
+    void prepareConversion_D2(void);
     volatile bool data_ready;
     uint16_t delta_t;
     //uint16_t t1, t2;
@@ -77,12 +76,12 @@ class MS5611 {
     uint8_t uosr_p;
     uint8_t uosr_t;
     volatile uint32_t D1, D2;
-    void reset (void);
-    void readPROM (void);
-    uint16_t readRegister16 (uint8_t reg);
-    uint32_t readRegister24 (uint8_t reg);
-    void setOversampling (ms5611_osr_t osr_p, ms5611_osr_t osr_t);
-    void timer1Init (void);
+    void reset(void);
+    void readPROM(void);
+    uint16_t readRegister16(uint8_t reg);
+    uint32_t readRegister24(uint8_t reg);
+    void setOversampling(ms5611_osr_t osr_p, ms5611_osr_t osr_t);
+    void timer1Init(void);
 };
 
 extern MS5611 ms5611;
