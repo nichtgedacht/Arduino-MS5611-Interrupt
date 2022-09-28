@@ -30,7 +30,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <Wire.h>
 #include <math.h>
 
-#include <MS5611-dual.h>
+#include <MS5611.h>
 
 MS5611 ms5611;
 
