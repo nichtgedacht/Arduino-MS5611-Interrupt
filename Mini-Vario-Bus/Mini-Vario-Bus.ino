@@ -5,11 +5,11 @@
 #define T2 200000.0L 
 
 #include <Wire.h>
-#include <MS5611.h>         //  https://github.com/nichtgedacht/Arduino-MS5611-Interrupt
+#include <MS5611.h>             //  https://github.com/nichtgedacht/Arduino-MS5611-Interrupt
 
 #ifndef DEBUG
-#include "JetiExProtocol.h" //	https://github.com/Pulsar07/JetiExSensor
-JetiExProtocol jetiEx;
+#include "JetiExBusProtocol.h"  // https://github.com/Sepp62/JetiExBus
+JetiExBusProtocol exBus;
 #endif
 
 #ifndef DEBUG
@@ -32,10 +32,7 @@ JETISENSOR_CONST sensors[] PROGMEM = {
 #endif    
     0                           // end of array
 };
-
-double avr_climb_1, avr_climb_2, avr_r_altitude0_1, avr_r_altitude0_2;
-uint8_t jetiSendCount = 0;
-#endif
+#endif //ndef DEBUG
 
 double referencePressure_1 = 0, referencePressure_2 = 0;
 double r_altitude_1 = 0, r_altitude0_1 = 0, r_altitude_2 = 0, r_altitude0_2 = 0; 
@@ -145,15 +142,13 @@ void setup () {
     referencePressure_2 = referencePressure_2 / 100;
 #endif    
 
-    // Check settings
-    //checkSettings();
-
 #ifndef DEBUG
-    jetiEx.Start ("mini_vario", sensors);
-    jetiEx.SetJetiSendCycle(75);
+    exBus.SetDeviceId(0x76, 0x32); // 0x3276
+    exBus.Start ("mini_vario", sensors, 0);
 #endif
 
     pinMode(LED_BUILTIN, OUTPUT);
+    digitalWrite( 13, LOW );
 }
 
 void loop () {
@@ -193,7 +188,7 @@ void loop () {
  *   dT = T2 - T1
  *   dT = (dt / alpha1) - ( dt / alpha2 ) 
  * 
- */
+ */        
         r_altitude0_1 = r_altitude0_1 - alfa_1 * (r_altitude0_1 - relativeAltitude_1);
 #ifdef DUAL        
         r_altitude0_2 = r_altitude0_2 - alfa_1 * (r_altitude0_2 - relativeAltitude_2);
@@ -203,20 +198,20 @@ void loop () {
 #ifdef DUAL        
         r_altitude_2 = r_altitude_2 -  alfa_2 * (r_altitude_2 - relativeAltitude_2);
 #endif
-       
+    
         climb0_1 = (r_altitude0_1 - r_altitude_1) * factor;   // Factor is 1000000/dT ( 1/dT as seconds )
 #ifdef DUAL        
         climb0_2 = (r_altitude0_2 - r_altitude_2) * factor;   // Factor is 1000000/dT ( 1/dT as seconds )
 #endif
-         
+        
         // smoothing the climb value by another exponential filter
         // time constant of filter changes dynamically
         // greater speed of change means less filtering.
-        // see "Nonlinear Exponential Filter"          
+        // see "Nonlinear Exponential Filter"   
         dyn_alfa_1 = abs( (climb_1 - climb0_1) / 0.8 );
 #ifdef DUAL        
         dyn_alfa_2 = abs( (climb_2 - climb0_2) / 0.8 );
-#endif               
+#endif        
         if ( dyn_alfa_1 >= 1 ) {
             dyn_alfa_1 = 1;
         }
@@ -226,14 +221,12 @@ void loop () {
             dyn_alfa_2 = 1;
         }
 #endif                
-        
         climb_1 = climb_1 - dyn_alfa_1 * ( climb_1 - climb0_1 );
 #ifdef DUAL        
         climb_2 = climb_2 - dyn_alfa_2 * ( climb_2 - climb0_2 );
 #endif        
         
 #ifdef DEBUG
-
         // output for plotter
         Serial.print (climb_1);
         Serial.print ("\t");
@@ -242,56 +235,19 @@ void loop () {
         Serial.print (r_altitude0_1);
         Serial.print ("\t");
         Serial.println (r_altitude0_2);
-
+        
 #else
-
-        // according the docu from Jeti, the master (sensordevice) must release
-        // the serial port for at least 20ms after it has sent its data
-        // To reach this we send averages of values every 7th time
-        // Prio for all values ist set to 1 which is the default
-        avr_climb_1 += climb_1;
-#ifdef DUAL           
-        avr_climb_2 += climb_2;
-#endif        
-        avr_r_altitude0_1 += r_altitude0_1;
-#ifdef DUAL        
-        avr_r_altitude0_2 += r_altitude0_2;
-#endif        
-        jetiSendCount++;
-
-        if ( jetiSendCount >= 7 ) {
-          
-            jetiSendCount = 0;           
-
-            jetiEx.SetSensorValue (ID_CLIMB_1, round ((avr_climb_1 / 7) * 100), 1);
+        exBus.SetSensorValue (ID_CLIMB_1, round ((climb_1) * 100));
 #ifdef DUAL             
-            jetiEx.SetSensorValue (ID_CLIMB_2, round ((avr_climb_2 / 7) * 100), 1);
+        exBus.SetSensorValue (ID_CLIMB_2, round ((climb_2) * 100));
 #endif            
-            jetiEx.SetSensorValue (ID_ALTITUDE_1, round ((avr_r_altitude0_1 / 7) * 10), 1);
+        exBus.SetSensorValue (ID_ALTITUDE_1, round ((r_altitude0_1) * 10));
 #ifdef DUAL            
-            jetiEx.SetSensorValue (ID_ALTITUDE_2, round ((avr_r_altitude0_2 / 7) * 10), 1);
+        exBus.SetSensorValue (ID_ALTITUDE_2, round ((r_altitude0_2) * 10));
 #endif
-
-            // If switched off in JetiExSerial.cpp -> ISR( USART_TX_vect )
-            // LED shows update cycle and transmission time if using an oscilloscop 
-            // digitalWrite( 13, HIGH );
-
-            // Attention!!! Modified Library in use. Condition of 150ms timing
-            // in JetiExProtocol::DoJetiSend() is set to 75ms!!!!!
-            // See SetJetiSendCycle(uint8_t aTime)
-            
-            jetiEx.DoJetiSend();
-
-            avr_climb_1 = 0;
-#ifdef DUAL           
-            avr_climb_2 = 0;
-#endif            
-            avr_r_altitude0_1 = 0;
-#ifdef DUAL            
-            avr_r_altitude0_2 = 0;
-#endif                        
 #endif
-
-        }
     }
+#ifndef DEBUG    
+    exBus.DoJetiExBus();
+#endif    
 }
