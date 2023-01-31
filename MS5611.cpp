@@ -1,12 +1,16 @@
 /*
 MS5611.cpp - Class file for the MS5611 Barometric Pressure & Temperature Sensor Arduino Library.
 
+Version: 4.0.0 by nichtgedacht
+modified to be interrupt driven
+modified to work with dual sensors
+modified to work on Samd21 
+
+Derived from:
+-------------------------------------------------------------------------------------------------
 Version: 1.0.0
 (c) 2014 Korneliusz Jarzebski
 www.jarzebski.pl
-
-Version: 2.1.0
-modified to be interrupt driven by nichtgedacht 
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the version 3 GNU General Public License as
@@ -54,15 +58,20 @@ bool MS5611::begin(ms5611_osr_t osr_p_1, ms5611_osr_t osr_t_1, bool dual,
     }
     data_ready = false;
 
+#if defined (__AVR_ATmega328P__) || (defined __AVR_ATmega328PB__) || defined (__AVR_ATmega32U4__)
     timer1Init(dual);
+#elif defined (__SAMD21__)
+    TC4_Init(dual);
+#endif
 
     if (dual) {
-        n_sensors = 2;
+        dual = true;
     }
 
     return true;
 }
 
+#if defined (__AVR_ATmega328P__) || defined (__AVR_ATmega328PB__) || defined (__AVR_ATmega32U4__) 
 void MS5611::timer1Init(bool dual) {
 
     uint16_t ct_t, ct_p;
@@ -107,10 +116,80 @@ void MS5611::timer1Init(bool dual) {
     TIMSK1 |= (1 << OCIE1B);    // Timer Compare Interrupt w.o. reset activ
     sei();                      // enable all interrupts
 }
+#elif defined (__SAMD21__)
+void MS5611::TC4_Init(bool dual) {
+
+    uint16_t ct_t, ct_p, cc1_time, cc0_time;
+
+    if (dual) {
+
+        // use greater conversion times for timer compares
+        if (ct_t_1 > ct_t_2) {
+            ct_t = ct_t_1;
+        } else {
+            ct_t = ct_t_2;
+        }
+
+        if (ct_p_1 > ct_p_2) {
+            ct_p = ct_p_1;
+        } else {
+            ct_p = ct_p_2;
+        }
+
+        cc1_time = ct_t + READ_PREP_COMP_A_DUAL;
+        cc0_time = ct_t + ct_p + READ_PREP_COMP_A_DUAL + READ_PREP_COMP_B_DUAL;
+        delta_t = ct_t + ct_p + READ_PREP_COMP_A_DUAL + READ_PREP_COMP_B_DUAL;
+
+    } else {
+
+        cc1_time = ct_t_1 + READ_PREP_COMP_A_SINGLE;
+        cc0_time = delta_t = ct_t_1 + ct_p_1 + READ_PREP_COMP_A_SINGLE + READ_PREP_COMP_B_SINGLE;
+        delta_t = ct_t_1 + ct_p_1 + READ_PREP_COMP_A_SINGLE + READ_PREP_COMP_B_SINGLE;
+    }    
+
+    /* Setup a generic clock GCLK4 for 16MHz  */
+    GCLK->GENDIV.reg = GCLK_GENDIV_DIV(3) |         // Divide the 48MHz clock source by divisor 3: 48MHz/3=16MHz
+                       GCLK_GENDIV_ID(4);           // Select Generic Clock (GCLK) 4
+
+    GCLK->GENCTRL.reg = GCLK_GENCTRL_IDC |          // Set the duty cycle to 50/50 HIGH/LOW
+                        GCLK_GENCTRL_GENEN |        // Enable GCLK4
+                        GCLK_GENCTRL_SRC_DFLL48M |  // Set the 48MHz clock source
+                        GCLK_GENCTRL_ID(4);         // Select GCLK4
+    while (GCLK->STATUS.bit.SYNCBUSY);              // Wait for synchronization
+
+    /* Feed Clock to TC4 and TC5 */
+    GCLK->CLKCTRL.reg = GCLK_CLKCTRL_CLKEN |        // Enable GCLK4 to TC4 and TC5
+                        GCLK_CLKCTRL_GEN_GCLK4 |    // Select GCLK4
+                        GCLK_CLKCTRL_ID_TC4_TC5;    // Feed the GCLK4 to TC4 and TC5
+
+    /* Configure TC4 as 16 Bit counter for 1uS per tick and MPWM mode */
+    TC4->COUNT16.CTRLA.reg = TC_CTRLA_PRESCALER_DIV16 |     // Set prescaler to 16, 48MHz/3/16 = 1MHz (1 us)
+                             TC_CTRLA_WAVEGEN_MPWM;         // Put the timer TC4 into match PWM (MPWM) mode.
+
+    /* Setup CC1 and CC0 */
+    TC4->COUNT16.CC[1].reg = cc1_time - 1;          // Set the TC4 CC1 register. At this value the first Interrupt occurs 
+    while (TC4->COUNT16.STATUS.bit.SYNCBUSY);   
+    TC4->COUNT16.CC[0].reg = cc0_time - 1;          // Set the TC4 CC0 register. After this value the counter resets
+    while (TC4->COUNT16.STATUS.bit.SYNCBUSY);
+
+
+    /* Setup NVIC for TC4 */
+    NVIC_SetPriority(TC4_IRQn, 0);    // Set the Nested Vector Interrupt Controller (NVIC) priority for TC4 to 0 (highest)
+    NVIC_EnableIRQ(TC4_IRQn);         // Connect TC4 to Nested Vector Interrupt Controller (NVIC)
+
+    /* Enable MC0 and MC1 interrupts */
+    TC4->COUNT16.INTENSET.reg = TC_INTENSET_MC0 | TC_INTENSET_MC1;    // Enable MC0 and MC1 interrupts
+
+    /* Start TC4 */
+    TC4->COUNT16.CTRLA.bit.ENABLE = 1; 
+
+}    
+#endif
 
 // Set oversampling value
 void MS5611::setOversampling(ms5611_osr_t osr_p_1, ms5611_osr_t osr_t_1,
                              bool dual, ms5611_osr_t osr_p_2, ms5611_osr_t osr_t_2) {
+                                
     switch (osr_p_1) {
     case MS5611_ULTRA_LOW_POWER:
         ct_p_1 = 600;
@@ -451,6 +530,7 @@ uint32_t MS5611::readRegister24(uint8_t reg, uint8_t address) {
     return value;
 }
 
+#if defined (__AVR_ATmega328P__) || defined (__AVR_ATmega328PB__) || defined (__AVR_ATmega32U4__)
 ISR(TIMER1_COMPB_vect) {
 
 //    ms5611.t1 = micros();
@@ -458,13 +538,13 @@ ISR(TIMER1_COMPB_vect) {
     sei();                      // default is disabled but needed for wire lib here
 
     ms5611.D2_1 = ms5611.readRawTemperature(MS5611_ADDRESS_1);
-    if (ms5611.n_sensors == 2) {
+    if (ms5611.dual) {
         ms5611.D2_2 = ms5611.readRawTemperature(MS5611_ADDRESS_2);
     }
     // prepare for Pressure
 
     ms5611.prepareConversion_D1(MS5611_ADDRESS_1);
-    if (ms5611.n_sensors == 2) {
+    if (ms5611.dual) {
         ms5611.prepareConversion_D1(MS5611_ADDRESS_2);  // prepareConversion on second sensor (dual == true)
     }
 //      ms5611.t2 = micros();
@@ -477,13 +557,13 @@ ISR(TIMER1_COMPA_vect) {
     sei();                      // default is disabled but needed for wire lib here
 
     ms5611.D1_1 = ms5611.readRawPressure(MS5611_ADDRESS_1);
-    if (ms5611.n_sensors == 2) {
+    if (ms5611.dual) {
         ms5611.D1_2 = ms5611.readRawPressure(MS5611_ADDRESS_2);
     }
     // prepare for Temperature
 
     ms5611.prepareConversion_D2(MS5611_ADDRESS_1);
-    if (ms5611.n_sensors == 2) {
+    if (ms5611.dual) {
         ms5611.prepareConversion_D2(MS5611_ADDRESS_2);  // prepareConversion on second sensor (dual == true)
     }
 
@@ -492,3 +572,49 @@ ISR(TIMER1_COMPA_vect) {
 //      ms5611.t4 = micros();
 
 }
+#elif defined (__SAMD21__)
+// Interrupt Service Routine (ISR) for timer TC4
+void TC4_Handler() {
+
+    // ms5611.t1 = micros();
+
+    /* Read pressure(s)*/
+    if (TC4->COUNT16.INTFLAG.bit.MC0 && TC4->COUNT16.INTENSET.bit.MC0) {
+        // digitalWrite(13, LOW);
+
+        ms5611.D1_1 = ms5611.readRawPressure(MS5611_ADDRESS_1);
+        if (ms5611.dual) {
+            ms5611.D1_2 = ms5611.readRawPressure(MS5611_ADDRESS_2);
+        }
+
+        /* Prepare for Temperature(s) conversion */
+        ms5611.prepareConversion_D2(MS5611_ADDRESS_1);
+        if (ms5611.dual) {
+            ms5611.prepareConversion_D2(MS5611_ADDRESS_2);  // prepareConversion on second sensor (dual == true)
+        }
+
+        ms5611.data_ready = true;
+    }
+
+    if (TC4->COUNT16.INTFLAG.bit.MC1 && TC4->COUNT16.INTENSET.bit.MC1) {
+        // digitalWrite(13, HIGH);
+
+        /* Read temperature(s) */
+        ms5611.D2_1 = ms5611.readRawTemperature(MS5611_ADDRESS_1);
+        if (ms5611.dual) {
+            ms5611.D2_2 = ms5611.readRawTemperature(MS5611_ADDRESS_2);
+        }
+
+        /* prepare for Pressure(s) conversion */
+        ms5611.prepareConversion_D1(MS5611_ADDRESS_1);
+        if (ms5611.dual) {
+            ms5611.prepareConversion_D1(MS5611_ADDRESS_2);  // prepareConversion on second sensor (dual == true)
+        }
+    }
+
+    /* clear the interrupt flags */
+    TC4->COUNT16.INTFLAG.reg = TC_INTFLAG_MC0 | TC_INTFLAG_MC1;
+
+    // ms5611.t2 = micros();
+ }
+#endif

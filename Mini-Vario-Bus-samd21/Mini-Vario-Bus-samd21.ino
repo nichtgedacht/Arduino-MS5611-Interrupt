@@ -1,20 +1,15 @@
+
 //#define DEBUG
 //#define DUAL
 // time constants of filter
 #define T1 150000.0L
 #define T2 200000.0L 
 
-#include <Wire.h>
-#include <MS5611.h>         //  https://github.com/nichtgedacht/Arduino-MS5611-Interrupt
+#include <MS5611.h>             //  https://github.com/nichtgedacht/Arduino-MS5611-Interrupt
 
-#ifndef DEBUG
-#include "JetiExProtocol.h" //	https://github.com/Pulsar07/JetiExSensor
-JetiExProtocol jetiEx;
-#endif
-
-//MS5611 ms5611;
-
-#ifndef DEBUG
+#include "JetiExBusProtocol.h"  //	https://github.com/nichtgedacht/JetiExBus
+JetiExBusProtocol exBus;
+ 
 enum {
     ID_CLIMB_1 = 1,
     ID_ALTITUDE_1,
@@ -35,10 +30,6 @@ JETISENSOR_CONST sensors[] PROGMEM = {
     0                           // end of array
 };
 
-double avr_climb_1, avr_climb_2, avr_r_altitude0_1, avr_r_altitude0_2;
-uint8_t jetiSendCount = 0;
-#endif
-
 double referencePressure_1 = 0, referencePressure_2 = 0;
 double r_altitude_1 = 0, r_altitude0_1 = 0, r_altitude_2 = 0, r_altitude0_2 = 0; 
 double climb_1 = 0, climb0_1 = 0, climb_2 = 0, climb0_2 = 0; 
@@ -50,42 +41,19 @@ double relativeAltitude_1 = 0, relativeAltitude_2 = 0;
 
 #ifdef DEBUG
 // debug function for checking double or float values
-void printDouble( double val, byte precision){
-  // prints val with number of decimal places determine by precision
-  // precision is a number from 0 to 6 indicating the desired decimial places
-  // example: printDouble( 3.1415, 2); // prints 3.14 (two decimal places)
-
-  Serial.print (int(val));  //prints the int part
-  if( precision > 0) {
-    Serial.print("."); // print the decimal point
-    unsigned long frac;
-    unsigned long mult = 1;
-    byte padding = precision -1;
-    while(precision--)
-       mult *=10;
-       
-    if(val >= 0)
-      frac = (val - int(val)) * mult;
-    else
-      frac = (int(val)- val ) * mult;
-    unsigned long frac1 = frac;
-    while( frac1 /= 10 )
-      padding--;
-    while(  padding--)
-      Serial.print("0");
-    Serial.print(frac,DEC) ;
-  }
-}
+// better use dtostrf()
 #endif
 
 void setup () {
 
     int i;
 
-#ifdef DEBUG
-    Serial.begin (115200);
-    //Serial.println("Initialize MS5611 Sensor");
-#endif
+//#ifdef DEBUG
+    Serial1.begin (125000);
+	while (!Serial1) {};
+	delay(100);
+    //Serial1.println("Initialize MS5611 Sensor");
+//#endif
 
     // Initialize MS5611 sensor(s)
     // first argument oversampling rate pressure, second for temperature
@@ -103,10 +71,9 @@ void setup () {
     // while (!ms5611.begin (MS5611_ULTRA_HIGH_RES, MS5611_STANDARD )) {
     // if these 2 args are as shown they can be ommited also:
     // while (!ms5611.begin ()) {
-    
-     
+         
 #ifdef DEBUG
-        Serial.println ("Could not find a valid MS5611 sensor, check wiring!");
+        Serial1.println ("Could not find a valid MS5611 sensor, check wiring!");
 #endif
         delay (500);
     }
@@ -147,18 +114,28 @@ void setup () {
     referencePressure_2 = referencePressure_2 / 100;
 #endif    
 
-    // Check settings
-    //checkSettings();
+    exBus.SetDeviceId(0x76, 0x32); // 0x3276
+    exBus.Start ("mini_vario", sensors, 0);
 
-#ifndef DEBUG
-    jetiEx.Start ("mini_vario", sensors);
-    jetiEx.SetJetiSendCycle(75);
-#endif
-
-    pinMode(LED_BUILTIN, OUTPUT);
+    pinMode(PIN_LED_TXL, OUTPUT);
+    pinMode(PIN_LED_13, OUTPUT);
+    pinMode(PIN_LED_RXL, OUTPUT);
+    digitalWrite( 13, HIGH );
+    digitalWrite( 12, HIGH );
+    digitalWrite( 11, HIGH );
 }
 
 void loop () {
+
+ 	if (exBus.IsBusReleased())
+	{ 
+    //  if ( exBus.HasNewChannelData() )
+    //  {
+    //      char buf[30];
+    //      sprintf(buf, "chan-%d: %.4d", 2, exBus.GetChannel(2));
+    //      Serial1.println(buf);
+    //	}
+	}
 
     if (ms5611.data_ready) {    // flag is interrupt trigggered and reset by ms5611.getPressure  
 
@@ -172,30 +149,30 @@ void loop () {
         relativeAltitude_2 = ms5611.getAltitude (realPressure_2, referencePressure_2);
 #endif
 
-/*
- *   dt means sample time interval [s] (delta_t)
- *   T  means time constant of exponential filter [s] (T1, T2)
- *   dT means difference of these Time constants [s] (T2 - T1)
- *   dx means difference of the results of both exponetial filters  
- *   alpha means smoothsness factor ( determines T )
- *   
- *   exponential filter:
- *   output[n] = output[n-1] - alpha * ( output[n-1] - input )
- *   
- *   if alpha == 1 then the output will be equal the input without
- *   any filtering
- *   
- *   relations:
- *   
- *   climb = dx / dT
- *   
- *   alpha = dt / ( T + dt )
- *   T = (dt / alpha) - dt
- * 
- *   dT = T2 - T1
- *   dT = (dt / alpha1) - ( dt / alpha2 ) 
- * 
- */
+
+// *   dt means sample time interval [s] (delta_t)
+// *   T  means time constant of exponential filter [s] (T1, T2)
+// *   dT means difference of these Time constants [s] (T2 - T1)
+// *   dx means difference of the results of both exponetial filters  
+// *   alpha means smoothsness factor ( determines T )
+// *   
+// *   exponential filter:
+// *   output[n] = output[n-1] - alpha * ( output[n-1] - input )
+// *   
+// *   if alpha == 1 then the output will be equal the input without
+// *   any filtering
+// *   
+// *   relations:
+// *   
+// *   climb = dx / dT
+// *   
+// *   alpha = dt / ( T + dt )
+// *   T = (dt / alpha) - dt
+// * 
+// *   dT = T2 - T1
+// *   dT = (dt / alpha1) - ( dt / alpha2 ) 
+// * 
+
         r_altitude0_1 = r_altitude0_1 - alfa_1 * (r_altitude0_1 - relativeAltitude_1);
 #ifdef DUAL        
         r_altitude0_2 = r_altitude0_2 - alfa_1 * (r_altitude0_2 - relativeAltitude_2);
@@ -205,20 +182,20 @@ void loop () {
 #ifdef DUAL        
         r_altitude_2 = r_altitude_2 -  alfa_2 * (r_altitude_2 - relativeAltitude_2);
 #endif
-       
+    
         climb0_1 = (r_altitude0_1 - r_altitude_1) * factor;   // Factor is 1000000/dT ( 1/dT as seconds )
 #ifdef DUAL        
         climb0_2 = (r_altitude0_2 - r_altitude_2) * factor;   // Factor is 1000000/dT ( 1/dT as seconds )
 #endif
-         
+        
         // smoothing the climb value by another exponential filter
         // time constant of filter changes dynamically
         // greater speed of change means less filtering.
-        // see "Nonlinear Exponential Filter"          
+        // see "Nonlinear Exponential Filter"   
         dyn_alfa_1 = abs( (climb_1 - climb0_1) / 0.8 );
 #ifdef DUAL        
         dyn_alfa_2 = abs( (climb_2 - climb0_2) / 0.8 );
-#endif               
+#endif        
         if ( dyn_alfa_1 >= 1 ) {
             dyn_alfa_1 = 1;
         }
@@ -228,72 +205,30 @@ void loop () {
             dyn_alfa_2 = 1;
         }
 #endif                
-        
         climb_1 = climb_1 - dyn_alfa_1 * ( climb_1 - climb0_1 );
 #ifdef DUAL        
         climb_2 = climb_2 - dyn_alfa_2 * ( climb_2 - climb0_2 );
 #endif        
         
 #ifdef DEBUG
-
         // output for plotter
-        Serial.print (climb_1);
-        Serial.print ("\t");
-        Serial.print (climb_2);     
-        Serial.print ("\t");
-        Serial.print (r_altitude0_1);
-        Serial.print ("\t");
-        Serial.println (r_altitude0_2);
-
-#else
-
-        // according the docu from Jeti, the master (sensordevice) must release
-        // the serial port for at least 20ms after it has sent its data
-        // To reach this we send averages of values every 7th time
-        // Prio for all values ist set to 1 which is the default
-        avr_climb_1 += climb_1;
-#ifdef DUAL           
-        avr_climb_2 += climb_2;
-#endif        
-        avr_r_altitude0_1 += r_altitude0_1;
-#ifdef DUAL        
-        avr_r_altitude0_2 += r_altitude0_2;
-#endif        
-        jetiSendCount++;
-
-        if ( jetiSendCount >= 7 ) {
-          
-            jetiSendCount = 0;           
-
-            jetiEx.SetSensorValue (ID_CLIMB_1, round ((avr_climb_1 / 7) * 100), 1);
+        Serial1.print (climb_1);
+        Serial1.print ("\t");
+    //    Serial1.print (climb_2);     
+    //    Serial1.print ("\t");
+        Serial1.println (r_altitude0_1);
+    //    Serial1.print ("\t");
+    //    Serial1.println (r_altitude0_2);
+        
+#endif
+        exBus.SetSensorValue (ID_CLIMB_1, round ((climb_1) * 100));
 #ifdef DUAL             
-            jetiEx.SetSensorValue (ID_CLIMB_2, round ((avr_climb_2 / 7) * 100), 1);
+        exBus.SetSensorValue (ID_CLIMB_2, round ((climb_2) * 100));
 #endif            
-            jetiEx.SetSensorValue (ID_ALTITUDE_1, round ((avr_r_altitude0_1 / 7) * 10), 1);
+        exBus.SetSensorValue (ID_ALTITUDE_1, round ((r_altitude0_1) * 10));
 #ifdef DUAL            
-            jetiEx.SetSensorValue (ID_ALTITUDE_2, round ((avr_r_altitude0_2 / 7) * 10), 1);
+        exBus.SetSensorValue (ID_ALTITUDE_2, round ((r_altitude0_2) * 10));
 #endif
-
-            // If switched off in JetiExSerial.cpp -> ISR( USART_TX_vect )
-            // LED shows update cycle and transmission time if using an oscilloscop 
-            // digitalWrite( 13, HIGH );
-
-            // Attention!!! Modified Library in use. Condition of 150ms timing
-            // in JetiExProtocol::DoJetiSend() is set to 75ms!!!!!
-            // See SetJetiSendCycle(uint8_t aTime)
-            
-            jetiEx.DoJetiSend();
-
-            avr_climb_1 = 0;
-#ifdef DUAL           
-            avr_climb_2 = 0;
-#endif            
-            avr_r_altitude0_1 = 0;
-#ifdef DUAL            
-            avr_r_altitude0_2 = 0;
-#endif                        
-#endif
-
-        }
-    }
-}
+    } // ms5611.data_ready 
+    exBus.DoJetiExBus();    
+} // loop

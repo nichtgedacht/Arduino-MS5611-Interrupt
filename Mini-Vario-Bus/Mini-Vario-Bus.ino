@@ -15,20 +15,20 @@ JetiExBusProtocol exBus;
 #ifndef DEBUG
 enum {
     ID_CLIMB_1 = 1,
-    ID_CLIMB_2,
     ID_ALTITUDE_1,
+    ID_CLIMB_2,
     ID_ALTITUDE_2
 };
 
 JETISENSOR_CONST sensors[] PROGMEM = {
     // id            name          unit         data type             precision 0->0, 1->0.0, 2->0.00
-    {ID_CLIMB_1, "Climb_1", "m/s", JetiSensor::TYPE_14b, 2},
+    {ID_CLIMB_1, "Climb 1", "m/s", JetiSensor::TYPE_14b, 2},
 #ifdef DUAL    
-    {ID_CLIMB_2, "Climb_2", "m/s", JetiSensor::TYPE_14b, 2},
+    {ID_CLIMB_2, "Climb 2", "m/s", JetiSensor::TYPE_14b, 2},
 #endif
-    {ID_ALTITUDE_1, "AltRelat._1", "m", JetiSensor::TYPE_14b, 1},
+    {ID_ALTITUDE_1, "AltRelat. 1", "m", JetiSensor::TYPE_14b, 1},
 #ifdef DUAL    
-    {ID_ALTITUDE_2, "AltRelat._2", "m", JetiSensor::TYPE_14b, 1},
+    {ID_ALTITUDE_2, "AltRelat. 2", "m", JetiSensor::TYPE_14b, 1},
 #endif    
     0                           // end of array
 };
@@ -227,16 +227,18 @@ void loop () {
 #endif        
         
 #ifdef DEBUG
-        // output for plotter
+        // output for plotter                    
         Serial.print (climb_1);
         Serial.print ("\t");
-        Serial.print (climb_2);     
+        Serial.print (climb_2);
         Serial.print ("\t");
         Serial.print (r_altitude0_1);
         Serial.print ("\t");
         Serial.println (r_altitude0_2);
         
 #else
+     //   digitalWrite( 13, HIGH );
+
         exBus.SetSensorValue (ID_CLIMB_1, round ((climb_1) * 100));
 #ifdef DUAL             
         exBus.SetSensorValue (ID_CLIMB_2, round ((climb_2) * 100));
@@ -246,6 +248,8 @@ void loop () {
         exBus.SetSensorValue (ID_ALTITUDE_2, round ((r_altitude0_2) * 10));
 #endif
 #endif
+     //   digitalWrite( 13, LOW );  
+
     }
 #ifndef DEBUG    
     exBus.DoJetiExBus();

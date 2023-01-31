@@ -23,3 +23,5 @@ I2C speed is increased to 500 kHz. For a single Sensor 12.5ms spaced samples are
 If working with 2 sensors the samples are 13.5ms spaced.
 This applies to a Pro Mini @8Mhz 
 
+Update:
+The library runs on Samd21 now. It uses Timer TC4 there.

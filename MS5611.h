@@ -1,12 +1,16 @@
 /*
 MS5611.h - Header file for the MS5611 Barometric Pressure & Temperature Sensor Arduino Library.
 
+Version: 4.0.0 by nichtgedacht
+modified to be interrupt driven
+modified to work with dual sensors
+modified to work on Samd21
+
+Derived from:
+---------------------------------------------------------------------------------------
 Version: 1.0.0
 (c) 2014 Korneliusz Jarzebski
 www.jarzebski.pl
-
-Version: 2.1.0
-modified to be interrupt driven by nichtgedacht 
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the version 3 GNU General Public License as
@@ -23,8 +27,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #ifndef MS5611_h
 #define MS5611_h
-
-#include <Arduino.h>
 
 #if ARDUINO >= 100
 #include "Arduino.h"
@@ -75,13 +77,14 @@ class MS5611 {
     volatile bool data_ready;
     uint16_t delta_t;
     volatile uint32_t D1_1, D2_1, D1_2, D2_2;
-    uint8_t n_sensors;
+    bool dual;
+
 
     // int32_t t1, t2, t3, t4;
 
   private:
 
-     uint8_t address;
+    uint8_t address;
     uint16_t fc_1[6], fc_2[6];
     uint16_t ct_p_1, ct_t_1, ct_p_2, ct_t_2;
     int32_t TEMP2;
@@ -94,7 +97,11 @@ class MS5611 {
     uint32_t readRegister24(uint8_t reg, uint8_t address);
     void setOversampling(ms5611_osr_t osr_p_1, ms5611_osr_t osr_t_1,
                          bool dual, ms5611_osr_t osr_p_2, ms5611_osr_t osr_t_2);
+#if defined (__AVR_ATmega328P__) || defined (__AVR_ATmega328PB__) || defined (__AVR_ATmega32U4__)                  
     void timer1Init(bool dual);
+#elif defined (__SAMD21__)
+    void TC4_Init(bool dual);
+#endif
 };
 
 extern MS5611 ms5611;
