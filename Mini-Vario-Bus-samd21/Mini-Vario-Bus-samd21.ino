@@ -1,14 +1,19 @@
 
 //#define DEBUG
-//#define DUAL
+#define DUAL
 // time constants of filter
-#define T1 150000.0L
-#define T2 200000.0L 
+//#define T1 150000.0L
+//#define T2 200000.0L 
 
 #include <MS5611.h>             //  https://github.com/nichtgedacht/Arduino-MS5611-Interrupt
 
 #include "JetiExBusProtocol.h"  //	https://github.com/nichtgedacht/JetiExBus
 JetiExBusProtocol exBus;
+
+double T1 = 150000;
+double T2 = 200000;
+
+uint16_t channelValue;
  
 enum {
     ID_CLIMB_1 = 1,
@@ -84,7 +89,7 @@ void setup () {
     alfa_2 = ms5611.delta_t / ( T2 + ms5611.delta_t );
 
     // calc gain from time constants chosen 
-    factor = 1000000 / (T2 - T1) ;
+    factor = 1000000 / (T2 - T1);
 
     // warm up
     i = 0;
@@ -123,27 +128,53 @@ void setup () {
     digitalWrite( 13, HIGH );
     digitalWrite( 12, HIGH );
     digitalWrite( 11, HIGH );
+
+//    pinMode(PIN_A8, OUTPUT);
+//    digitalWrite(PIN_A8, LOW);
+
+//    pinMode(PIN_A0, OUTPUT);
+//    digitalWrite(PIN_A0, LOW);
+
 }
 
 void loop () {
 
  	if (exBus.IsBusReleased())
 	{ 
-    //  if ( exBus.HasNewChannelData() )
-    //  {
-    //      char buf[30];
-    //      sprintf(buf, "chan-%d: %.4d", 2, exBus.GetChannel(2));
-    //      Serial1.println(buf);
-    //	}
-	}
+        if ( exBus.HasNewChannelData() )
+        {
+            channelValue = exBus.GetChannel(11);
+    //        char buf[30];
+    //        sprintf(buf, "chan-%d: %.4d", 12, channelValue);
+    //        Serial1.println(buf);
 
-    if (ms5611.data_ready) {    // flag is interrupt trigggered and reset by ms5611.getPressure  
+            // make time constants variable
+            T1 = 150000 + 150000 * ((double)channelValue / 1000 - 1 );
+            T2 = 200000 + 200000 * ((double)channelValue / 1000 - 1 );
+
+            // calc alfas from ms5611.delta_t for time constants chosen
+            // ms5611.delta_t depends on number of sensors and oversampling rates chosen
+            alfa_1 = ms5611.delta_t / ( T1 + ms5611.delta_t );
+            alfa_2 = ms5611.delta_t / ( T2 + ms5611.delta_t );
+
+            // calc gain from time constants chosen 
+            factor = 1000000 / (T2 - T1);
+
+    //        dtostrf(T1, 6, 0, buf);
+    //        Serial1.println(buf);
+
+       	}
+	}
+    
+
+    if (ms5611.data_ready) {    // flag is interrupt trigggered and reset by ms5611.getPressure
+
+//        digitalWrite(PIN_A8, HIGH);
 
         long realPressure_1 = ms5611.getPressure (true, 1);
 #ifdef DUAL        
         long realPressure_2 = ms5611.getPressure (true, 2);
-#endif        
-        
+#endif
         relativeAltitude_1 = ms5611.getAltitude (realPressure_1, referencePressure_1);
 #ifdef DUAL        
         relativeAltitude_2 = ms5611.getAltitude (realPressure_2, referencePressure_2);
@@ -214,11 +245,11 @@ void loop () {
         // output for plotter
         Serial1.print (climb_1);
         Serial1.print ("\t");
-    //    Serial1.print (climb_2);     
-    //    Serial1.print ("\t");
-        Serial1.println (r_altitude0_1);
-    //    Serial1.print ("\t");
-    //    Serial1.println (r_altitude0_2);
+        Serial1.print (climb_2);     
+        Serial1.print ("\t");
+        Serial1.print (r_altitude0_1);
+        Serial1.print ("\t");
+        Serial1.println (r_altitude0_2);
         
 #endif
         exBus.SetSensorValue (ID_CLIMB_1, round ((climb_1) * 100));
@@ -229,6 +260,10 @@ void loop () {
 #ifdef DUAL            
         exBus.SetSensorValue (ID_ALTITUDE_2, round ((r_altitude0_2) * 10));
 #endif
-    } // ms5611.data_ready 
-    exBus.DoJetiExBus();    
+
+//        digitalWrite(PIN_A8, LOW);
+    } // ms5611.data_ready
+
+    exBus.DoJetiExBus();
+      
 } // loop

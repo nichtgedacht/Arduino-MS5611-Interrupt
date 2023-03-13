@@ -65,7 +65,7 @@ bool MS5611::begin(ms5611_osr_t osr_p_1, ms5611_osr_t osr_t_1, bool dual,
 #endif
 
     if (dual) {
-        dual = true;
+        ms5611.dual = true;
     }
 
     return true;

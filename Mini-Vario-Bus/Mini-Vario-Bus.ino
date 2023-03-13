@@ -8,7 +8,7 @@
 #include <MS5611.h>             //  https://github.com/nichtgedacht/Arduino-MS5611-Interrupt
 
 #ifndef DEBUG
-#include "JetiExBusProtocol.h"  // https://github.com/Sepp62/JetiExBus
+#include "JetiExBusProtocol.h"  // https://github.com/nichtgedacht/JetiExBus
 JetiExBusProtocol exBus;
 #endif
 
