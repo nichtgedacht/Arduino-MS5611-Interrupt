@@ -40,9 +40,29 @@ MS5611 ms5611;
 
 bool MS5611::begin(ms5611_osr_t osr_p_1, ms5611_osr_t osr_t_1, bool dual,
                    ms5611_osr_t osr_p_2, ms5611_osr_t osr_t_2) {
+
+    uint8_t error;
+
     Wire.begin();
 
     Wire.setClock(500000L);
+
+    Wire.beginTransmission(MS5611_ADDRESS_1);
+    error = Wire.endTransmission();
+
+    if ( error != 0) {
+        return false;
+    }
+
+    if (dual) {
+
+        Wire.beginTransmission(MS5611_ADDRESS_2);
+        error = Wire.endTransmission();
+
+        if ( error != 0) {
+            return false;
+        }
+    }
 
     reset(dual);
 
@@ -174,7 +194,7 @@ void MS5611::TC4_Init(bool dual) {
 
 
     /* Setup NVIC for TC4 */
-    NVIC_SetPriority(TC4_IRQn, 0);    // Set the Nested Vector Interrupt Controller (NVIC) priority for TC4 to 0 (highest)
+    NVIC_SetPriority(TC4_IRQn, 2);    // Set the Nested Vector Interrupt Controller (NVIC) priority for TC4 to 2 (0 to 3)
     NVIC_EnableIRQ(TC4_IRQn);         // Connect TC4 to Nested Vector Interrupt Controller (NVIC)
 
     /* Enable MC0 and MC1 interrupts */
